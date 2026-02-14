@@ -26,8 +26,8 @@
       :root { --plyr-color-main: #ec4899; }
 
       /* 文本截断 */
-      .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-      .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .line-clamp-1 { display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+      .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   </style>
 </head>
 
@@ -64,7 +64,7 @@
 
       <div class="relative z-10 mb-6 hidden md:block">
         <div id="vinylRecord" class="w-48 h-48 rounded-full bg-black border-4 border-gray-800 shadow-2xl flex items-center justify-center vinyl-paused">
-          <img id="vinylCover" src="https://via.placeholder.com/150" class="w-32 h-32 rounded-full object-cover opacity-80" alt="Cover">
+          <img id="vinylCover" src="/public/css/img.png?vinyl" class="w-32 h-32 rounded-full object-cover opacity-80" alt="Cover">
         </div>
       </div>
 
@@ -170,9 +170,26 @@
     folders.forEach((folder, folderIndex) => {
       const li = document.createElement("li");
 
-      // 尝试获取封面图 (这里假设 folder 结构里可能有 cover 字段，如果没有就用占位图)
-      // 注意：你需要根据你实际的 API 返回结构调整这里
-      const coverUrl = folder.cover || "/public/css/img.png";
+      // 查找本地封面文件 (仅在根目录) (优先级: cover.* > thumbnail.*)
+      let coverUrl = "/public/css/img.png"; // 默认占位图
+      if (folder.files) {
+        const coverFile = folder.files.find(f => 
+          f.name.toLowerCase().startsWith('.workinfo_cover') && 
+          f.name.match(/\.(jpg|jpeg|png|webp)$/i) &&
+          !f.path.includes('/')  // 仅在根目录
+        );
+      
+        const thumbnailFile = folder.files.find(f => 
+          f.name.toLowerCase().startsWith('.workinfo_thumbnail') && 
+          f.name.match(/\.(jpg|jpeg|png|webp)$/i) &&
+          !f.path.includes('/')  // 仅在根目录
+        );
+        
+        const imageFile = coverFile || thumbnailFile;
+        if (imageFile) {
+          coverUrl = folder.baseDir + "/" + folder.name + "/" + imageFile.name;
+        }
+      }
 
       // 生成卡片 HTML
       li.className = "group cursor-pointer rounded-xl p-3 hover:bg-gray-50 transition border border-transparent hover:border-pink-100 flex gap-3 items-center";
@@ -212,15 +229,26 @@
     document.getElementById("mediaTitle").innerText = folder.name;
     document.getElementById("mediaSubtitle").innerText = folder.rj_code || "未知编号";
 
-    // 尝试更新背景图和黑胶封面
-    // 逻辑：如果在 files 里找到了图片，就用第一张作为背景
-    const coverFile = folder.files.find(f => f.name.match(/\.(jpg|jpeg|png|webp)$/i));
+    // 尝试更新背景图和黑胶封面 (仅在根目录)
+    // 优先级: cover.* > thumbnail.*
+    let coverFile = folder.files.find(f => 
+      f.name.toLowerCase().startsWith('.workinfo_cover') && 
+      f.name.match(/\.(jpg|jpeg|png|webp)$/i) &&
+      !f.name.includes('/')  // 仅在根目录
+    );
+    if (!coverFile) {
+      coverFile = folder.files.find(f => 
+        f.name.toLowerCase().startsWith('.workinfo_thumbnail') && 
+        f.name.match(/\.(jpg|jpeg|png|webp)$/i) &&
+        !f.name.includes('/')  // 仅在根目录
+      );
+    }
     if (coverFile) {
-      const fullCoverPath = folder.baseDir + "/" + folder.name + "/" + coverFile.path;
+      const fullCoverPath = folder.baseDir + "/" + folder.name + "/" + coverFile.name;
       document.getElementById('vinylCover').src = fullCoverPath;
       document.getElementById('playerBg').style.backgroundImage = `url('${fullCoverPath}')`;
     } else {
-      document.getElementById('vinylCover').src = "https://via.placeholder.com/150?text=NO+IMG";
+      document.getElementById('vinylCover').src = "/public/css/img.png?vinyl";
       document.getElementById('playerBg').style.backgroundImage = "none";
     }
 

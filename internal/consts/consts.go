@@ -14,6 +14,13 @@ const DbName = "asmroner.db"
 // FailedLogName 下载错误日志文件名
 const FailedLogName = "download_errors.log"
 
+// WorkInfo 相关文件名常量
+const (
+	WorkInfoFileName        = ".workinfo.json"
+	WorkInfoThumbnailPrefix = ".workinfo_thumbnail"
+	WorkInfoCoverPrefix     = ".workinfo_cover"
+)
+
 // asmr.one id类型
 var AsmrOneIDRegex = regexp.MustCompile(`(?i)^(RJ|VJ|BJ|AJ|CJ|DL|NP|AL|KN)\d+$`)
 

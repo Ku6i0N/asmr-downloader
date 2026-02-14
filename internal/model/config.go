@@ -20,6 +20,7 @@ type Downloader struct {
 	PreferMedia       string `mapstructure:"prefer_media"`
 	SkipExistingFiles bool   `mapstructure:"skip_existing_files"`
 	FolderNameStyle   string `mapstructure:"folder_name_style"`
+	MetadataOnly      bool   `mapstructure:"metadata_only"`
 }
 
 type Limit struct {

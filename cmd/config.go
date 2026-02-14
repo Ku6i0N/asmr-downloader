@@ -101,6 +101,8 @@ func InitConfig(reader *bufio.Reader, configFile string) {
 	skipExistingFiles := prompt(reader, "跳过已存在的文件 (Skip existing files, default: true): ", "true")
 	skipExistingFilesBool := strings.ToLower(skipExistingFiles) == "true" || skipExistingFiles == "y"
 	folderNameStyle := prompt(reader, "full | code_only | rj_and_title] (default: full): ", "full")
+	metadataOnly := prompt(reader, "仅下载元数据 (Metadata only, default: false): ", "false")
+	metadataOnlyBool := strings.ToLower(metadataOnly) == "true" || metadataOnly == "y"
 
 	// ------------------------- 写入配置 -------------------------
 	viper.Set("user.account", account)
@@ -122,6 +124,7 @@ func InitConfig(reader *bufio.Reader, configFile string) {
 	viper.Set("limit.download_jitter_max", downloadJitterMax)
 	viper.Set("downloader.skip_existing_files", skipExistingFilesBool)
 	viper.Set("downloader.folder_name_style", folderNameStyle)
+	viper.Set("downloader.metadata_only", metadataOnlyBool)
 
 	writeConfig(configFile)
 

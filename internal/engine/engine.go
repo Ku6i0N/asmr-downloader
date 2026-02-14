@@ -199,7 +199,22 @@ func (m *EngineManager) AuthLogin(ctx context.Context) error {
 }
 
 // SimpleDownload 并行下载，限速器控制提交速率，WorkerPool 控制最大并发数
+// 如果启用了 metadata_only，则单线程下载，每次间隔 1 秒
 func (m *EngineManager) SimpleDownload(ctx context.Context, ids []string, storeBaseDir string) error {
+	// 如果是仅元数据模式，使用单线程逐个下载
+	if m.Config.Downloader.MetadataOnly {
+		for _, id := range ids {
+			if err := m.DownloadOne(ctx, id, storeBaseDir); err != nil {
+				logger.Fail("下载 %s 失败: %s", id, logger.SummarizeError(err))
+				continue // 继续下载其他项目
+			}
+			// 在每次下载后等待 1 秒
+			time.Sleep(1 * time.Second)
+		}
+		return nil
+	}
+
+	// 正常并行下载模式
 	group := m.WorkerPool.NewGroup()
 	for _, id := range ids {
 		// 限速：在主 goroutine 中等待令牌，控制提交速率
@@ -278,20 +293,41 @@ func (m *EngineManager) DownloadOne(ctx context.Context, id string, storeBaseDir
 	}()
 	task.Info("目标目录: %s", folderName)
 
-	// 保存 WorkInfo 为 JSON 文件
+	// Check if metadata files already exist in work folder - if so, skip download
+	workinfoPath := filepath.Join(storeFileDir, consts.WorkInfoFileName)
+	thumbnailPath := filepath.Join(storeFileDir, consts.WorkInfoThumbnailPrefix+".jpg")
+	coverPath := filepath.Join(storeFileDir, consts.WorkInfoCoverPrefix+".jpg")
+
+	if _, err := os.Stat(workinfoPath); err == nil {
+		if _, err := os.Stat(thumbnailPath); err == nil {
+			if _, err := os.Stat(coverPath); err == nil {
+				logger.Info("Metadata already exists for work %s, skipping download", id)
+				return nil
+			}
+		}
+	}
+
+	// 保存 WorkInfo 为 JSON 文件到工作文件夹
 	if workInfoData, err := json.Marshal(workInfo); err == nil {
-		workinfoPath := filepath.Join(storeFileDir, ".workinfo.json")
+		os.MkdirAll(storeFileDir, os.ModePerm)
+		workinfoPath := filepath.Join(storeFileDir, consts.WorkInfoFileName)
 		if writeErr := os.WriteFile(workinfoPath, workInfoData, 0644); writeErr == nil {
 			task.Debug("工作信息已保存: %s", workinfoPath)
 		}
 	}
 
-	// 下载缩略图和主封面图
+	// 下载缩略图和主封面图到工作文件夹
 	if workInfo.ThumbnailCoverUrl != "" {
-		go m.downloadImage(workInfo.ThumbnailCoverUrl, storeFileDir, "thumbnail")
+		m.downloadImage(workInfo.ThumbnailCoverUrl, storeFileDir, consts.WorkInfoThumbnailPrefix)
 	}
 	if workInfo.MainCoverUrl != "" {
-		go m.downloadImage(workInfo.MainCoverUrl, storeFileDir, "cover")
+		m.downloadImage(workInfo.MainCoverUrl, storeFileDir, consts.WorkInfoCoverPrefix)
+	}
+
+	// 如果仅下载元数据，则在此返回
+	if m.Config.Downloader.MetadataOnly {
+		task.Info("仅下载元数据模式，已完成 workinfo 和封面图片的下载")
+		return nil
 	}
 
 	needDownloadUrls, err := m.ensureDirExists(tracks, storeFileDir)
@@ -712,6 +748,9 @@ func (m *EngineManager) downloadImage(imageURL string, storeDir string, filePref
 		return
 	}
 
+	// 创建目录
+	os.MkdirAll(storeDir, os.ModePerm)
+
 	// 从URL中提取文件扩展名
 	ext := filepath.Ext(imageURL)
 	// 如果URL中有查询参数，清除它们
@@ -812,6 +851,20 @@ func (m *EngineManager) SearchForCountResult(ctx context.Context, asmrOneQuerySt
 }
 
 func (m *EngineManager) DownloadBatchMedias(ctx context.Context, works []model.SearchResultView, storePathDir string) error {
+	// 如果是仅元数据模式，使用单线程逐个下载
+	if m.Config.Downloader.MetadataOnly {
+		for _, work := range works {
+			if err := m.DownloadOne(ctx, work.SourceID, storePathDir); err != nil {
+				logger.Fail("下载 %s 失败: %s", work.SourceID, logger.SummarizeError(err))
+				continue // 继续下载其他项目
+			}
+			// 在每次下载后等待 1 秒
+			time.Sleep(1 * time.Second)
+		}
+		return nil
+	}
+
+	// 正常并行下载模式
 	group := m.WorkerPool.NewGroup()
 	for _, work := range works {
 		// 限速：在主 goroutine 中等待令牌，控制提交速率
@@ -830,6 +883,20 @@ func (m *EngineManager) DownloadBatchMedias(ctx context.Context, works []model.S
 }
 
 func (m *EngineManager) DownloadMediaByBatchIds(ctx context.Context, worksId []string, storePathDir string) error {
+	// 如果是仅元数据模式，使用单线程逐个下载
+	if m.Config.Downloader.MetadataOnly {
+		for _, id := range worksId {
+			if err := m.DownloadOne(ctx, id, storePathDir); err != nil {
+				logger.Fail("下载作品 %s 失败: %s", id, logger.SummarizeError(err))
+				continue // 继续下载其他项目
+			}
+			// 在每次下载后等待 1 秒
+			time.Sleep(1 * time.Second)
+		}
+		return nil
+	}
+
+	// 正常并行下载模式
 	group := m.WorkerPool.NewGroup()
 	for _, id := range worksId {
 		// 限速：在主 goroutine 中等待令牌，控制提交速率
