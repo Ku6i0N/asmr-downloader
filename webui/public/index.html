@@ -209,7 +209,7 @@
             ` : ''}
             ${folder.tags && folder.tags.length > 0 ? `
             <div class="flex flex-wrap gap-1">
-                ${folder.tags.map(tag => `
+                ${folder.tags.map(tag => tag?.enName && `
                 <span class="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded whitespace-nowrap" title="${tag.jaName}">${tag.enName}</span>
                 `).join('')}
             </div>
