@@ -547,6 +547,16 @@ func (m *EngineManager) buildMetaDataWorkUrls(totalCount int, pageSize int) []st
 }
 
 func (m *EngineManager) downloadFile(url string, path string, fileName string) error {
+	// Sanitize
+	originalFileName := fileName
+	invalidChars := []string{"?", "<", ">", ":", "*", "|", "\""}
+	for _, char := range invalidChars {
+		fileName = strings.ReplaceAll(fileName, char, "_")
+	}
+	if fileName != originalFileName {
+		logger.Warn("文件名包含无效字符，已自动替换 - Filename sanitized: %s → %s", originalFileName, fileName)
+	}
+
 	storePath := filepath.Join(path, fileName)
 	maxRetries := m.Config.Downloader.MaxRetries
 	if maxRetries <= 0 {
