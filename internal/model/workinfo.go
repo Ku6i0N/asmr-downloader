@@ -1,5 +1,9 @@
 package model
 
+import (
+	"encoding/json"
+)
+
 type WorkInfo struct {
 	ID              int           `json:"id"`
 	Title           string        `json:"title"`
@@ -89,4 +93,32 @@ type WorkInfo struct {
 	SamCoverURL       string `json:"samCoverUrl"`
 	ThumbnailCoverURL string `json:"thumbnailCoverUrl"`
 	MainCoverURL      string `json:"mainCoverUrl"`
+}
+
+// UnmarshalJSON handles the case where language_editions is an object instead of an array
+func (wi *WorkInfo) UnmarshalJSON(data []byte) error {
+	// First, unmarshal into a map to handle all fields
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Handle language_editions special case
+	if langEditionsRaw, exists := raw["language_editions"]; exists && langEditionsRaw != nil {
+		switch langEditionsRaw.(type) {
+		case map[string]interface{}:
+			// It's an object, convert to empty array in the raw data
+			raw["language_editions"] = []interface{}{}
+		}
+	}
+
+	// Re-marshal and unmarshal with the corrected data
+	correctedData, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+
+	// Now use a type alias to avoid infinite recursion
+	type Alias WorkInfo
+	return json.Unmarshal(correctedData, (*Alias)(wi))
 }

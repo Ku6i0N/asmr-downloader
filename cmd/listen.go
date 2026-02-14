@@ -229,6 +229,17 @@ func scanDirectory(baseDir string) ([]FileInfo, error) {
 	return list, err
 }
 
+// hasSubtitleFiles 检查文件列表中是否包含字幕文件 (.vtt 或 .srt)
+func hasSubtitleFiles(files []FileInfo) bool {
+	for _, f := range files {
+		lower := strings.ToLower(f.Name)
+		if strings.HasSuffix(lower, ".vtt") || strings.HasSuffix(lower, ".srt") {
+			return true
+		}
+	}
+	return false
+}
+
 // buildInmemoryDb 初始化内存数据库
 func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 	//构建内存sqlite数据库
@@ -245,9 +256,11 @@ func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 	if err != nil {
 		log.Fatalf("Failed to read directory: %v", err)
 	}
-	//下载的数据目录中的文件名必须符合
-	// xxx-8位数字-[sub/nosub]-xxxxx
-	r := regexp.MustCompile(`^[^-\s]+-\d{8}-(sub|nosub)-[^-\s]+$`)
+	//下载的数据目录中的文件名支持三种格式:
+	// 1. code_only: RJ01037721
+	// 2. rj_and_title: RJ01037721-【标题】
+	// 3. full: RJ01037721-20230320-sub-【标题】
+	r := regexp.MustCompile(`^[A-Z]{2}\d{8}(-.+)?$`)
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -257,19 +270,38 @@ func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 			//切分信息
 			splitStr := strings.Split(entry.Name(), "-")
 			mediaId := splitStr[0]
-			date := splitStr[1]
-			hasSubtitles := splitStr[2]
-			title := splitStr[3]
+
+			var date, title string
+
+			if len(splitStr) == 1 {
+				// code_only: RJ01037721
+				date = ""
+				title = mediaId
+			} else if len(splitStr) == 2 {
+				// rj_and_title: RJ01037721-【标题】
+				date = ""
+				title = splitStr[1]
+			} else {
+				// full format: RJ01037721-20230320-sub-【标题】
+				date = splitStr[1]
+				// title might contain dashes, so join remaining parts
+				// skip the subtitle flag at splitStr[2]
+				title = strings.Join(splitStr[3:], "-")
+			}
 
 			directory, err := scanDirectory(filepath.Join(asbDataFolder, entry.Name()))
 			if err != nil {
 				log.Fatalf("Failed to scan directory: %v", err)
 			}
+
+			// Check if directory contains any .vtt or .srt files
+			hasSubtitles := hasSubtitleFiles(directory)
+
 			// 构建 FolderInfo
 			folder := FolderInfo{
 				MediaId:      mediaId,
 				Date:         date,
-				HasSubtitles: hasSubtitles == "sub",
+				HasSubtitles: hasSubtitles,
 				Title:        title,
 				Name:         entry.Name(),
 				Files:        directory,
