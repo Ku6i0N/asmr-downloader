@@ -19,6 +19,7 @@ type Downloader struct {
 	SyncWantedSize    string `mapstructure:"sync_wanted_size"`
 	PreferMedia       string `mapstructure:"prefer_media"`
 	SkipExistingFiles bool   `mapstructure:"skip_existing_files"`
+	FolderNameStyle   string `mapstructure:"folder_name_style"`
 }
 
 type Limit struct {

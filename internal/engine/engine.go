@@ -249,14 +249,28 @@ func (m *EngineManager) DownloadOne(ctx context.Context, id string, storeBaseDir
 	}
 
 	// 新建下载目录名
-	folderName := fmt.Sprintf(
-		"%s%s-%s-%s-%s",
-		strings.ToUpper(prefix),
-		number,
-		strings.ReplaceAll(workInfo.Release, "-", ""),
-		hasSubtitle,
-		utils.NormalDirPathStr(strings.ReplaceAll(workInfo.Title, "/", "")),
-	)
+	// folder name config
+	rjCode := fmt.Sprintf("%s%s", strings.ToUpper(prefix), number)
+	normalizedTitle := utils.NormalDirPathStr(strings.ReplaceAll(workInfo.Title, "/", ""))
+
+	var folderName string
+	switch strings.ToLower(m.Config.Downloader.FolderNameStyle) {
+	case "code_only":
+		// RJ code only
+		folderName = rjCode
+	case "rj_and_title":
+		// RJ code + title
+		folderName = fmt.Sprintf("%s-%s", rjCode, normalizedTitle)
+	default:
+		// full (original): RJ code + release date + subtitle + title
+		folderName = fmt.Sprintf(
+			"%s-%s-%s-%s",
+			rjCode,
+			strings.ReplaceAll(workInfo.Release, "-", ""),
+			hasSubtitle,
+			normalizedTitle,
+		)
+	}
 	storeFileDir := filepath.Join(storeBaseDir, folderName)
 	defer func() {
 		utils.RemoveEmptyDirs(storeFileDir)

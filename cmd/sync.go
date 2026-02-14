@@ -188,14 +188,29 @@ func doBatchSyncDownload(downDir string, batchSize int, batchCount int, download
 		if work.HasSubtitle {
 			hasSubtitle = "sub"
 		}
-		folderName := fmt.Sprintf(
-			"%s%s-%s-%s-%s",
-			strings.ToUpper(prefix),
-			number,
-			strings.ReplaceAll(work.Release, "-", ""),
-			hasSubtitle,
-			utils.NormalDirPathStr(strings.ReplaceAll(work.Title, "/", "")),
-		)
+
+		// folder name config
+		rjCode := fmt.Sprintf("%s%s", strings.ToUpper(prefix), number)
+		normalizedTitle := utils.NormalDirPathStr(strings.ReplaceAll(work.Title, "/", ""))
+
+		var folderName string
+		switch strings.ToLower(model.AppConfig.Downloader.FolderNameStyle) {
+		case "code_only":
+			// RJ code only
+			folderName = rjCode
+		case "rj_and_title":
+			// RJ code + title
+			folderName = fmt.Sprintf("%s-%s", rjCode, normalizedTitle)
+		default:
+			// full (original): RJ code + release date + subtitle + title
+			folderName = fmt.Sprintf(
+				"%s-%s-%s-%s",
+				rjCode,
+				strings.ReplaceAll(work.Release, "-", ""),
+				hasSubtitle,
+				normalizedTitle,
+			)
+		}
 
 		workSyncInfo := model.WorkSyncInfo{
 			MetadataWorkId: work.ID,
