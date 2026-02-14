@@ -8,6 +8,7 @@ import (
 	"asmroner/internal/utils"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -276,6 +277,23 @@ func (m *EngineManager) DownloadOne(ctx context.Context, id string, storeBaseDir
 		utils.RemoveEmptyDirs(storeFileDir)
 	}()
 	task.Info("目标目录: %s", folderName)
+
+	// 保存 WorkInfo 为 JSON 文件
+	if workInfoData, err := json.Marshal(workInfo); err == nil {
+		workinfoPath := filepath.Join(storeFileDir, ".workinfo.json")
+		if writeErr := os.WriteFile(workinfoPath, workInfoData, 0644); writeErr == nil {
+			task.Debug("工作信息已保存: %s", workinfoPath)
+		}
+	}
+
+	// 下载缩略图和主封面图
+	if workInfo.ThumbnailCoverUrl != "" {
+		go m.downloadImage(workInfo.ThumbnailCoverUrl, storeFileDir, "thumbnail")
+	}
+	if workInfo.MainCoverUrl != "" {
+		go m.downloadImage(workInfo.MainCoverUrl, storeFileDir, "cover")
+	}
+
 	needDownloadUrls, err := m.ensureDirExists(tracks, storeFileDir)
 	if err != nil {
 		return err
@@ -644,7 +662,12 @@ func (m *EngineManager) downloadFile(url string, path string, fileName string) e
 		}
 		if !resp.IsSuccess() {
 			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode())
-			if resp.StatusCode() >= 500 || resp.StatusCode() == 429 {
+			if resp.StatusCode() == 429 {
+				logger.Warn("Sleeping... 下载文件 %s 触发速率限制 (HTTP 429), 等待 10 秒后重试...", fileName)
+				time.Sleep(10 * time.Second) //sleep 10s
+				continue
+			}
+			if resp.StatusCode() >= 500 {
 				continue // 服务端错误或限流，可重试
 			}
 			logger.Error("下载文件 %s 失败, HTTP 状态码: %d", fileName, resp.StatusCode())
@@ -681,6 +704,51 @@ func isRetryableError(err error) bool {
 		}
 	}
 	return false
+}
+
+// downloadImage 下载封面图片到指定目录
+func (m *EngineManager) downloadImage(imageURL string, storeDir string, filePrefix string) {
+	if imageURL == "" {
+		return
+	}
+
+	// 从URL中提取文件扩展名
+	ext := filepath.Ext(imageURL)
+	// 如果URL中有查询参数，清除它们
+	if idx := strings.Index(ext, "?"); idx != -1 {
+		ext = ext[:idx]
+	}
+	// 如果没有扩展名，默认为 .jpg
+	if ext == "" {
+		ext = ".jpg"
+	}
+
+	fileName := filePrefix + ext
+	filePath := filepath.Join(storeDir, fileName)
+
+	// 检查文件是否已存在
+	if _, err := os.Stat(filePath); err == nil {
+		logger.Debug("封面图片已存在，跳过下载: %s", fileName)
+		return
+	}
+
+	// 下载图片
+	resp, err := m.Client.R().
+		SetOutput(filePath).
+		Get(imageURL)
+
+	if err != nil {
+		logger.Warn("下载 %s 图片失败: %s", filePrefix, logger.SummarizeError(err))
+		return
+	}
+
+	if !resp.IsSuccess() {
+		logger.Warn("下载 %s 图片失败，HTTP 状态码: %d", filePrefix, resp.StatusCode())
+		os.Remove(filePath)
+		return
+	}
+
+	logger.Debug("已保存 %s 图片: %s", filePrefix, fileName)
 }
 
 func (m *EngineManager) SearchForCountResult(ctx context.Context, asmrOneQueryStr string, count int) (model.SearchResult, error) {

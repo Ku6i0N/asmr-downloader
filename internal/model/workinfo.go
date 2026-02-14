@@ -91,8 +91,8 @@ type WorkInfo struct {
 		SourceType string `json:"source_type"`
 	} `json:"circle"`
 	SamCoverURL       string `json:"samCoverUrl"`
-	ThumbnailCoverURL string `json:"thumbnailCoverUrl"`
-	MainCoverURL      string `json:"mainCoverUrl"`
+	ThumbnailCoverUrl string `json:"thumbnailCoverUrl"`
+	MainCoverUrl      string `json:"mainCoverUrl"`
 }
 
 // UnmarshalJSON handles the case where language_editions is an object instead of an array

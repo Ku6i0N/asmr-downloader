@@ -6,6 +6,7 @@ import (
 	"asmroner/internal/model"
 	"asmroner/webui"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -179,6 +180,7 @@ type FolderInfo struct {
 	Date         string     `json:"date"`
 	HasSubtitles bool       `json:"hasSubtitles"`
 	Title        string     `json:"title"`
+	Rating       float32    `json:"rating"`
 	BaseDir      string     `json:"baseDir"`
 	Files        []FileInfo `gorm:"foreignKey:FolderId" json:"files"`
 }
@@ -240,6 +242,25 @@ func hasSubtitleFiles(files []FileInfo) bool {
 	return false
 }
 
+// readRatingFromWorkInfo 从 .workinfo.json 文件读取评分
+func readRatingFromWorkInfo(folderPath string) float32 {
+	workinfoPath := filepath.Join(folderPath, ".workinfo.json")
+	data, err := os.ReadFile(workinfoPath)
+	if err != nil {
+		return 0
+	}
+
+	var workInfo struct {
+		RateAverage2Dp float32 `json:"rate_average_2dp"`
+	}
+
+	if err := json.Unmarshal(data, &workInfo); err != nil {
+		return 0
+	}
+
+	return workInfo.RateAverage2Dp
+}
+
 // buildInmemoryDb 初始化内存数据库
 func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 	//构建内存sqlite数据库
@@ -297,12 +318,16 @@ func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 			// Check if directory contains any .vtt or .srt files
 			hasSubtitles := hasSubtitleFiles(directory)
 
+			// Read rating from .workinfo.json if it exists
+			rating := readRatingFromWorkInfo(filepath.Join(asbDataFolder, entry.Name()))
+
 			// 构建 FolderInfo
 			folder := FolderInfo{
 				MediaId:      mediaId,
 				Date:         date,
 				HasSubtitles: hasSubtitles,
 				Title:        title,
+				Rating:       rating,
 				Name:         entry.Name(),
 				Files:        directory,
 				BaseDir:      baseDir,
