@@ -98,6 +98,8 @@ func InitConfig(reader *bufio.Reader, configFile string) {
 	downloadQPS := promptFloat(reader, "下载请求 QPS (Download QPS, default: 0.2): ", 0.2)
 	downloadJitterMin := promptInt(reader, "下载抖动最小值 (Download jitter min, default: 2000ms): ", 2000)
 	downloadJitterMax := promptInt(reader, "下载抖动最大值 (Download jitter max, default: 5000ms): ", 5000)
+	skipExistingFiles := prompt(reader, "跳过已存在的文件 (Skip existing files, default: true): ", "true")
+	skipExistingFilesBool := strings.ToLower(skipExistingFiles) == "true" || skipExistingFiles == "y"
 
 	// ------------------------- 写入配置 -------------------------
 	viper.Set("user.account", account)
@@ -117,6 +119,7 @@ func InitConfig(reader *bufio.Reader, configFile string) {
 	viper.Set("limit.download_qps", downloadQPS)
 	viper.Set("limit.download_jitter_min", downloadJitterMin)
 	viper.Set("limit.download_jitter_max", downloadJitterMax)
+	viper.Set("downloader.skip_existing_files", skipExistingFilesBool)
 
 	writeConfig(configFile)
 

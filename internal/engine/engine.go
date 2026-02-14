@@ -558,6 +558,47 @@ func (m *EngineManager) downloadFile(url string, path string, fileName string) e
 	}
 
 	storePath := filepath.Join(path, fileName)
+
+	// Check if file already exists
+	fileInfo, err := os.Stat(storePath)
+	if err == nil {
+		// File exists
+		existingSize := fileInfo.Size()
+		logger.Info("文件已存在, existing file: %s (大小 size: %d 字节)", fileName, existingSize)
+
+		// Get remote file size via HEAD request
+		var contentLength string
+		headResp, headErr := m.Client.R().Head(url)
+		if headErr == nil && headResp.IsSuccess() {
+			contentLength = headResp.Header().Get("Content-Length")
+			if contentLength != "" {
+				remoteSize, parseErr := strconv.ParseInt(contentLength, 10, 64)
+				if parseErr == nil {
+					if existingSize == remoteSize {
+						// File size matches - always skip regardless of SkipExistingFiles
+						logger.Info("文件已完整存在，跳过下载: %s", fileName)
+						return nil
+					} else {
+						// File size mismatch - always re-download
+						logger.Warn("文件大小不匹配(本地: %d, 远程: %d)，重新下载: %s", existingSize, remoteSize, fileName)
+						os.Remove(storePath)
+					}
+				}
+			}
+		}
+
+		// If we couldn't verify size, SkipExistingFiles controls behavior
+		if headErr != nil || contentLength == "" {
+			if m.Config.Downloader.SkipExistingFiles {
+				logger.Info("无法验证文件大小，但跳过已存在的文件已启用，跳过: %s", fileName)
+				return nil
+			} else {
+				logger.Warn("无法验证文件大小，但重新下载已启用，重新下载: %s", fileName)
+				os.Remove(storePath)
+			}
+		}
+	}
+
 	maxRetries := m.Config.Downloader.MaxRetries
 	if maxRetries <= 0 {
 		maxRetries = 3
