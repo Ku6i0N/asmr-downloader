@@ -293,16 +293,18 @@ func (m *EngineManager) DownloadOne(ctx context.Context, id string, storeBaseDir
 	}()
 	task.Info("目标目录: %s", folderName)
 
-	// Check if metadata files already exist in work folder - if so, skip download
-	workinfoPath := filepath.Join(storeFileDir, consts.WorkInfoFileName)
-	thumbnailPath := filepath.Join(storeFileDir, consts.WorkInfoThumbnailPrefix+".jpg")
-	coverPath := filepath.Join(storeFileDir, consts.WorkInfoCoverPrefix+".jpg")
+	// Check if metadata files already exist in work folder - if so, skip download but only when doing a metadata-only download.
+	if m.Config.Downloader.MetadataOnly {
+		workinfoPath := filepath.Join(storeFileDir, consts.WorkInfoFileName)
+		thumbnailPath := filepath.Join(storeFileDir, consts.WorkInfoThumbnailPrefix+".jpg")
+		coverPath := filepath.Join(storeFileDir, consts.WorkInfoCoverPrefix+".jpg")
 
-	if _, err := os.Stat(workinfoPath); err == nil {
-		if _, err := os.Stat(thumbnailPath); err == nil {
-			if _, err := os.Stat(coverPath); err == nil {
-				logger.Info("Metadata already exists for work %s, skipping download", id)
-				return nil
+		if _, err := os.Stat(workinfoPath); err == nil {
+			if _, err := os.Stat(thumbnailPath); err == nil {
+				if _, err := os.Stat(coverPath); err == nil {
+					logger.Info("Metadata already exists for work %s, skipping download", id)
+					return nil
+				}
 			}
 		}
 	}

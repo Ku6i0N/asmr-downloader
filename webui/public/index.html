@@ -53,9 +53,9 @@
     </ul>
 
     <div class="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 text-sm">
-                <button id="prevPage" class="px-3 py-1.5 rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50">上一页</button>
+                <button id="prevPage" class="px-3 py-1.5 rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50">⮜ 上一页</button>
       <span id="pageInfo" class="font-mono text-gray-500">1/1</span>
-                <button id="nextPage" class="px-3 py-1.5 rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50">下一页</button>
+                <button id="nextPage" class="px-3 py-1.5 rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50">下一页 ⮞</button>
     </div>
   </div>
 
@@ -107,6 +107,8 @@
   let currentMediaList = [];
   let currentMediaIndex = -1;
   let currentFolder = null;
+  let expandedSubfolders = new Set();
+  let currentPlayingFilePath = null;
 
   let allFolders = [];
   document.addEventListener("DOMContentLoaded", () => {
@@ -185,7 +187,12 @@
       });
 
       const sortedTags = [...enTags].sort((a, b) => a.localeCompare(b));
-      tagFilter.innerHTML = '<option value="">全部标签</option>';
+      tagFilter.innerHTML = '<option value="">— All —</option>';
+
+      const favoriteOption = document.createElement("option");
+      favoriteOption.value = "__favorites__";
+      favoriteOption.innerText = "★ Favorites";
+      tagFilter.appendChild(favoriteOption);
 
       sortedTags.forEach(tagName => {
           const option = document.createElement("option");
@@ -195,6 +202,18 @@
       });
 
       tagFilter.value = sortedTags.includes(currentValue) ? currentValue : "";
+      if (currentValue === "__favorites__") {
+        tagFilter.value = "__favorites__";
+      }
+  }
+
+  function isFolderFavorite(folder) {
+    const markerName = ".isfavorite";
+    return (folder.files || []).some(file => {
+      const rawPath = normalizePath(file.path || file.name || "").toLowerCase();
+      if (!rawPath) return false;
+      return rawPath === markerName || rawPath.endsWith(`/${markerName}`);
+    });
   }
 
   function applyFolderFilters() {
@@ -218,7 +237,10 @@
               vaNames.some(name => name.includes(keyword)) ||
               enTagNames.some(tag => tag.includes(keyword));
 
-          const tagMatched = !selectedTag || (folder.tags || []).some(tag => tag?.enName === selectedTag);
+            const tagMatched = !selectedTag ||
+              (selectedTag === "__favorites__"
+              ? isFolderFavorite(folder)
+              : (folder.tags || []).some(tag => tag?.enName === selectedTag));
 
           return searchMatched && tagMatched;
       });
@@ -258,7 +280,13 @@
 
       // 生成卡片 HTML
       li.className = "group cursor-pointer rounded-xl p-3 hover:bg-gray-50 transition border border-transparent hover:border-pink-100 flex gap-3 items-center";
+      const favoriteBadge = `
+        <div class="w-6 h-36 shrink-0 flex items-start justify-center pt-1" ${isFolderFavorite(folder) ? 'title="Favorite"' : ''}>
+          <span class="text-yellow-500 text-3xl ${isFolderFavorite(folder) ? '' : 'opacity-0'}">★</span>
+        </div>
+      `;
       li.innerHTML = `
+        ${favoriteBadge}
         <div class="relative w-36 h-36 shrink-0">
             <img src="${coverUrl}" class="w-full h-full object-cover rounded-lg shadow-sm bg-gray-200" alt="cover">
             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition rounded-lg"></div>
@@ -354,50 +382,194 @@
       document.getElementById('playerBg').style.backgroundImage = "none";
     }
 
-    const mediaFiles = folder.files.filter(f =>
-      f.name.endsWith(".mp3") ||
-      f.name.endsWith(".wav") ||
-      f.name.endsWith(".flac")
-    );
+    const allFiles = folder.files || [];
+    const mediaFiles = allFiles.filter(f => isAudioFileByName(f.name || f.path));
 
     currentMediaList = mediaFiles;
     currentMediaIndex = -1;
+    currentPlayingFilePath = null;
+    expandedSubfolders = new Set();
 
-    renderMediaList(folder, mediaFiles);
+    renderMediaList(folder, allFiles);
+  }
+
+  function normalizePath(path) {
+    return (path || "").replace(/\\/g, '/').replace(/^\/+/, '');
+  }
+
+  function isAudioFileByName(fileName) {
+    return /\.(mp3|wav|flac)$/i.test(fileName || "");
+  }
+
+  function ensureFolderNode(root, dirParts) {
+    let node = root;
+    let currentFolderPath = '';
+
+    dirParts.forEach(part => {
+      currentFolderPath = currentFolderPath ? `${currentFolderPath}/${part}` : part;
+      if (!node.folders.has(part)) {
+        node.folders.set(part, { name: part, path: currentFolderPath, folders: new Map(), files: [] });
+      }
+      node = node.folders.get(part);
+    });
+
+    return node;
+  }
+
+  function buildFileTree(files) {
+    const root = { folders: new Map(), files: [] };
+
+    const normalizedEntries = files
+      .map(file => {
+        const originalPath = (file.path || file.name || "").replace(/\\/g, '/');
+        const normalizedPath = normalizePath(originalPath).replace(/\/+$/, '');
+
+        return {
+          file,
+          originalPath,
+          normalizedPath
+        };
+      })
+      .filter(entry => !!entry.normalizedPath);
+
+    const inferredFolderPaths = new Set();
+    normalizedEntries.forEach(({ normalizedPath }) => {
+      const parts = normalizedPath.split('/').filter(Boolean);
+      if (parts.length <= 1) return;
+
+      for (let i = 1; i < parts.length; i++) {
+        inferredFolderPaths.add(parts.slice(0, i).join('/'));
+      }
+    });
+
+    normalizedEntries.forEach(({ file, originalPath, normalizedPath: rawPath }) => {
+      if (!rawPath) return;
+
+      const parts = rawPath.split('/').filter(Boolean);
+      if (parts.length === 0) return;
+
+      const lastPart = parts[parts.length - 1];
+      const hasTrailingSlash = /\/$/.test(originalPath);
+      const isMarkedDirectory = file.isDirectory === true || file.isDir === true || file.type === 'directory' || file.kind === 'directory';
+      const shouldTreatAsDirectory = isMarkedDirectory || hasTrailingSlash || inferredFolderPaths.has(rawPath);
+
+      if (shouldTreatAsDirectory) {
+        ensureFolderNode(root, parts);
+        return;
+      }
+
+      const fileName = lastPart;
+      const dirParts = parts.slice(0, -1);
+
+      const node = ensureFolderNode(root, dirParts);
+
+      node.files.push({
+        file,
+        normalizedPath: rawPath,
+        name: fileName,
+        isAudio: isAudioFileByName(fileName)
+      });
+    });
+
+    return root;
+  }
+
+  function folderContainsPlaying(folderPath) {
+    if (!currentPlayingFilePath) return false;
+    const currentPath = normalizePath(currentPlayingFilePath);
+    const normalizedFolderPath = normalizePath(folderPath);
+    return currentPath.startsWith(`${normalizedFolderPath}/`);
+  }
+
+  function renderTreeNode(ul, folder, node, depth) {
+    const sortedFolders = [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name));
+
+    sortedFolders.forEach(folderNode => {
+      const isExpanded = expandedSubfolders.has(folderNode.path);
+      const showFolderPlayingIndicator = folderContainsPlaying(folderNode.path) && !isExpanded;
+
+      const folderLi = document.createElement("li");
+      folderLi.className = "flex items-center gap-2 py-2 pr-3 rounded-lg bg-gray-50 hover:bg-pink-50 cursor-pointer transition border border-gray-100";
+      folderLi.style.paddingLeft = `${12 + depth * 20}px`;
+      folderLi.innerHTML = `
+        <span class="text-xs text-gray-400 w-4">${isExpanded ? '▾' : '▸'}</span>
+        <span class="text-sm">${isExpanded ? '📂' : '📁'}</span>
+        <span class="text-sm font-medium text-gray-700 flex-1 truncate">${folderNode.name}</span>
+        ${showFolderPlayingIndicator ? '<span class="text-xs text-pink-500">🔊</span>' : ''}
+      `;
+
+      folderLi.onclick = () => {
+        if (isExpanded) {
+          expandedSubfolders.delete(folderNode.path);
+        } else {
+          expandedSubfolders.add(folderNode.path);
+        }
+        renderMediaList(folder, folder.files || []);
+      };
+
+      ul.appendChild(folderLi);
+
+      if (isExpanded) {
+        renderTreeNode(ul, folder, folderNode, depth + 1);
+      }
+    });
+
+    sortedFiles.forEach(({ file, normalizedPath, name, isAudio }) => {
+      const isPlaying = normalizePath(currentPlayingFilePath) === normalizedPath;
+
+      const fileLi = document.createElement("li");
+      fileLi.className = isPlaying
+        ? "flex items-center gap-3 py-2 pr-3 rounded-lg bg-pink-50 cursor-pointer group transition border-l-4 border-pink-500 shadow-sm"
+        : "flex items-center gap-3 py-2 pr-3 rounded-lg hover:bg-pink-50 cursor-pointer group transition border-l-4 border-transparent";
+      fileLi.style.paddingLeft = `${24 + depth * 20}px`;
+
+      fileLi.innerHTML = `
+        <span class="text-sm">${isAudio ? '🎵' : '📄'}</span>
+        <div class="flex-1 text-sm ${isPlaying ? 'text-pink-600' : 'text-gray-700'} font-medium truncate group-hover:text-pink-600">${name}</div>
+        ${isPlaying ? '<span class="text-xs text-pink-500">🔊</span>' : `<span class="text-xs text-gray-300 group-hover:text-pink-400">${(name.split('.').pop() || '').toUpperCase()}</span>`}
+      `;
+
+      fileLi.onclick = () => {
+        if (isAudio) {
+          currentMediaIndex = currentMediaList.findIndex(item => normalizePath(item.path) === normalizedPath);
+          playMedia(folder, file);
+          return;
+        }
+
+        const fileUrl = encodeURI(folder.baseDir + "/" + folder.name + "/" + (file.path || file.name));
+        window.open(fileUrl, "_blank", "noopener,noreferrer");
+      };
+
+      ul.appendChild(fileLi);
+    });
   }
 
   /** 渲染媒体文件列表 */
-  function renderMediaList(folder, mediaFiles) {
+  function renderMediaList(folder, files) {
     const ul = document.getElementById("mediaList");
     ul.innerHTML = "";
 
-    if(mediaFiles.length === 0) {
-      ul.innerHTML = '<div class="text-center py-10 text-gray-400">该目录下没有音频文件</div>';
+    if (files.length === 0) {
+      ul.innerHTML = '<div class="text-center py-10 text-gray-400">该目录下没有文件</div>';
       return;
     }
 
-    mediaFiles.forEach((file, index) => {
-      const li = document.createElement("li");
-      li.className = "flex items-center gap-3 p-3 rounded-lg hover:bg-pink-50 cursor-pointer group transition border-l-4 border-transparent";
-      li.innerHTML = `
-        <span class="text-xs font-mono text-gray-400 w-6 text-right group-hover:text-pink-400">${index + 1}</span>
-        <div class="flex-1 text-sm text-gray-700 font-medium truncate group-hover:text-pink-600">${file.name}</div>
-        <span class="text-xs text-gray-300 group-hover:text-pink-400">MP3</span>
-      `;
-
-      li.onclick = () => {
-        currentMediaIndex = index;
-        playMedia(folder, file);
-      };
-      ul.appendChild(li);
-    });
+    const fileTree = buildFileTree(files);
+    renderTreeNode(ul, folder, fileTree, 0);
   }
 
   /** 播放媒体并更新高亮 */
   function playMedia(folder, file) {
+    if (currentMediaIndex < 0) {
+      currentMediaIndex = currentMediaList.findIndex(item => item.path === file.path);
+    }
+
+    currentPlayingFilePath = normalizePath(file.path || file.name);
+
     const base = folder.baseDir + "/" + folder.name + "/" + file.path;
     const vttPath = base + ".vtt";
-    const vttFileName = file.path + ".vtt";
+    const vttFileName = (file.path || file.name) + ".vtt";
     const subtitleExists = folder.files.some(f => f.path === vttFileName);
 
     // 设置 Plyr 源
@@ -425,19 +597,8 @@
   }
 
   function updateMediaHighlight() {
-    const lis = document.querySelectorAll("#mediaList li");
-    lis.forEach((li, idx) => {
-      if (idx === currentMediaIndex) {
-        li.className = "flex items-center gap-3 p-3 rounded-lg bg-pink-50 cursor-pointer group transition border-l-4 border-pink-500 shadow-sm";
-        li.querySelector('.text-gray-700').classList.remove('text-gray-700');
-        li.querySelector('.font-medium').classList.add('text-pink-600');
-        // 播放动画图标
-        li.querySelector('span:first-child').innerHTML = '<i class="fas fa-volume-up text-pink-500 animate-pulse"></i>';
-      } else {
-        li.className = "flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer group transition border-l-4 border-transparent";
-        li.querySelector('span:first-child').innerText = idx + 1;
-      }
-    });
+    if (!currentFolder) return;
+    renderMediaList(currentFolder, currentFolder.files || []);
   }
 
   function highlightCurrentFolder() {
@@ -475,9 +636,9 @@
 
         // 延迟一点播放，等待列表渲染
         setTimeout(() => {
-          const nextMediaListLis = document.querySelectorAll("#mediaList li");
-          if(nextMediaListLis.length > 0) {
-            nextMediaListLis[0].click(); // 触发第一个文件的点击事件
+          if (currentFolder && currentMediaList.length > 0) {
+            currentMediaIndex = 0;
+            playMedia(currentFolder, currentMediaList[0]);
           }
         }, 500);
       }
