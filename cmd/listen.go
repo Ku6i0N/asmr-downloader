@@ -172,6 +172,21 @@ func init() {
 	listenCmd.Flags().IntVarP(&listenPort, "port", "p", 9999, "服务器端口")
 }
 
+// Tag 标签信息（包含英文和日文名称）
+type Tag struct {
+	Id       int64  `gorm:"primaryKey" json:"id"`
+	FolderId int64  `json:"folderId"`
+	EnName   string `json:"enName"`
+	JaName   string `json:"jaName"`
+}
+
+// VA 声优信息
+type VA struct {
+	Id       int64  `gorm:"primaryKey" json:"id"`
+	FolderId int64  `json:"folderId"`
+	Name     string `json:"name"`
+}
+
 // FolderInfo 用于 /api/list 的 JSON 输出
 type FolderInfo struct {
 	Id           int64      `gorm:"primaryKey" json:"id"`
@@ -182,6 +197,8 @@ type FolderInfo struct {
 	Title        string     `json:"title"`
 	Rating       float32    `json:"rating"`
 	BaseDir      string     `json:"baseDir"`
+	Tags         []Tag      `gorm:"foreignKey:FolderId" json:"tags"`
+	Vas          []VA       `gorm:"foreignKey:FolderId" json:"vas"`
 	Files        []FileInfo `gorm:"foreignKey:FolderId" json:"files"`
 }
 
@@ -242,6 +259,70 @@ func hasSubtitleFiles(files []FileInfo) bool {
 	return false
 }
 
+// readTagsFromWorkInfo 从 .workinfo.json 文件读取标签（仅英文和日文）
+func readTagsFromWorkInfo(folderPath string) []Tag {
+	workinfoPath := filepath.Join(folderPath, ".workinfo.json")
+	data, err := os.ReadFile(workinfoPath)
+	if err != nil {
+		return []Tag{}
+	}
+
+	var workInfo struct {
+		Tags []struct {
+			I18N struct {
+				EnUs struct {
+					Name string `json:"name"`
+				} `json:"en-us"`
+				JaJp struct {
+					Name string `json:"name"`
+				} `json:"ja-jp"`
+			} `json:"i18n"`
+		} `json:"tags"`
+	}
+
+	if err := json.Unmarshal(data, &workInfo); err != nil {
+		return []Tag{}
+	}
+
+	var tags []Tag
+	for _, t := range workInfo.Tags {
+		tags = append(tags, Tag{
+			EnName: t.I18N.EnUs.Name,
+			JaName: t.I18N.JaJp.Name,
+		})
+	}
+
+	return tags
+}
+
+// readVasFromWorkInfo 从 .workinfo.json 文件读取声优信息
+func readVasFromWorkInfo(folderPath string) []VA {
+	workinfoPath := filepath.Join(folderPath, ".workinfo.json")
+	data, err := os.ReadFile(workinfoPath)
+	if err != nil {
+		return []VA{}
+	}
+
+	var workInfo struct {
+		Vas []struct {
+			Name string `json:"name"`
+		} `json:"vas"`
+	}
+
+	if err := json.Unmarshal(data, &workInfo); err != nil {
+		return []VA{}
+	}
+
+	var vas []VA
+	for _, v := range workInfo.Vas {
+		vas = append(vas, VA{
+			Name: v.Name,
+		})
+	}
+
+	return vas
+}
+
 // readRatingFromWorkInfo 从 .workinfo.json 文件读取评分
 func readRatingFromWorkInfo(folderPath string) float32 {
 	workinfoPath := filepath.Join(folderPath, ".workinfo.json")
@@ -269,7 +350,7 @@ func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 		log.Fatalf("Failed to create in-memory SQLite database: %v", err)
 	}
 	// 自动迁移数据库结构
-	db.AutoMigrate(&FolderInfo{}, &FileInfo{})
+	db.AutoMigrate(&FolderInfo{}, &FileInfo{}, &Tag{}, &VA{})
 	//defer db.Close()
 	// 遍历asbDataFolder一级目录
 	entries, err := os.ReadDir(asbDataFolder)
@@ -321,6 +402,12 @@ func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 			// Read rating from .workinfo.json if it exists
 			rating := readRatingFromWorkInfo(filepath.Join(asbDataFolder, entry.Name()))
 
+			// Read tags from .workinfo.json if it exists
+			tags := readTagsFromWorkInfo(filepath.Join(asbDataFolder, entry.Name()))
+
+			// Read VAs from .workinfo.json if it exists
+			vas := readVasFromWorkInfo(filepath.Join(asbDataFolder, entry.Name()))
+
 			// 构建 FolderInfo
 			folder := FolderInfo{
 				MediaId:      mediaId,
@@ -328,6 +415,8 @@ func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 				HasSubtitles: hasSubtitles,
 				Title:        title,
 				Rating:       rating,
+				Tags:         tags,
+				Vas:          vas,
 				Name:         entry.Name(),
 				Files:        directory,
 				BaseDir:      baseDir,
@@ -353,7 +442,7 @@ func getFolderInfoPage(db *gorm.DB, page, pageSize int, baseDir string) ([]Folde
 	}
 
 	// 查询指定页的数据，并预加载 Files
-	if err := db.Preload("Files").
+	if err := db.Preload("Files").Preload("Tags").Preload("Vas").
 		Offset((page - 1) * pageSize).
 		Limit(pageSize).
 		Find(&folders).Error; err != nil {

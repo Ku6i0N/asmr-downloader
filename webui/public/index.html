@@ -35,7 +35,7 @@
 
 <div class="flex flex-col md:flex-row h-full w-full max-w-[1920px] mx-auto bg-white shadow-xl overflow-hidden">
 
-  <div class="w-full md:w-[400px] flex flex-col border-r border-gray-100 bg-white z-20 h-full">
+  <div class="w-full md:w-[600px] flex flex-col border-r border-gray-100 bg-white z-20 h-full">
 
     <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-white/95 backdrop-blur z-10 sticky top-0">
       <h1 class="font-bold text-pink-500 text-lg tracking-tight"><i class="fas fa-music mr-2"></i>ASMR Lite</h1>
@@ -75,6 +75,8 @@
       <div class="mt-4 z-20 text-center px-4">
         <h3 id="mediaTitle" class="text-white font-medium text-lg line-clamp-1">未播放</h3>
         <p id="mediaSubtitle" class="text-gray-400 text-sm mt-1">选择左侧列表开始播放</p>
+        <div id="mediaVas" class="mt-2 flex justify-center flex-wrap gap-2"></div>
+        <div id="mediaTags" class="flex flex-wrap gap-1 mt-2 justify-center"></div>
       </div>
     </div>
 
@@ -96,7 +98,7 @@
 
 <script>
   let currentPage = 1;
-  let pageSize = 20;
+  let pageSize = 100;
   let player = null;
 
   let currentMediaList = [];
@@ -174,15 +176,11 @@
       let coverUrl = "/public/css/img.png"; // 默认占位图
       if (folder.files) {
         const coverFile = folder.files.find(f => 
-          f.name.toLowerCase().startsWith('.workinfo_cover') && 
-          f.name.match(/\.(jpg|jpeg|png|webp)$/i) &&
-          !f.path.includes('/')  // 仅在根目录
+          f.name.toLowerCase().startsWith('.workinfo_cover')
         );
       
         const thumbnailFile = folder.files.find(f => 
-          f.name.toLowerCase().startsWith('.workinfo_thumbnail') && 
-          f.name.match(/\.(jpg|jpeg|png|webp)$/i) &&
-          !f.path.includes('/')  // 仅在根目录
+          f.name.toLowerCase().startsWith('.workinfo_thumbnail')
         );
         
         const imageFile = coverFile || thumbnailFile;
@@ -194,16 +192,28 @@
       // 生成卡片 HTML
       li.className = "group cursor-pointer rounded-xl p-3 hover:bg-gray-50 transition border border-transparent hover:border-pink-100 flex gap-3 items-center";
       li.innerHTML = `
-        <div class="relative w-16 h-16 shrink-0">
+        <div class="relative w-36 h-36 shrink-0">
             <img src="${coverUrl}" class="w-full h-full object-cover rounded-lg shadow-sm bg-gray-200" alt="cover">
             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition rounded-lg"></div>
         </div>
         <div class="flex-1 min-w-0">
             <div class="font-bold text-gray-800 text-sm line-clamp-2 leading-tight mb-1 group-hover:text-pink-600 transition">${folder.name}</div>
-            <div class="flex items-center gap-2 text-xs text-gray-400">
+            <div class="flex items-center gap-2 text-xs text-gray-400 mb-1">
                 <span class="bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-mono">${folder.mediaId || 'RJ-----'}</span>
                 <span><i class="fas fa-star text-yellow-400 mr-1"></i>${folder.rating || '0.0'}</span>
             </div>
+            ${folder.vas && folder.vas.length > 0 ? `
+            <div class="text-xs text-gray-600 line-clamp-1 mb-1">
+                <i class="fas fa-microphone text-gray-400 mr-1"></i>${folder.vas.map(v => v.name).join(', ')}
+            </div>
+            ` : ''}
+            ${folder.tags && folder.tags.length > 0 ? `
+            <div class="flex flex-wrap gap-1">
+                ${folder.tags.map(tag => `
+                <span class="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded whitespace-nowrap" title="${tag.jaName}">${tag.enName}</span>
+                `).join('')}
+            </div>
+            ` : ''}
         </div>
         <button class="text-gray-300 hover:text-pink-500 p-2"><i class="far fa-heart"></i></button>
       `;
@@ -227,7 +237,32 @@
 
     // 更新右侧标题区
     document.getElementById("mediaTitle").innerText = folder.name;
-    document.getElementById("mediaSubtitle").innerText = folder.rj_code || "未知编号";
+    document.getElementById("mediaSubtitle").innerText = folder.mediaId || "未知编号";
+
+    // 更新声优
+    const vasContainer = document.getElementById("mediaVas");
+    vasContainer.innerHTML = "";
+    if (folder.vas && folder.vas.length > 0) {
+      folder.vas.forEach(va => {
+        const vaBadge = document.createElement("span");
+        vaBadge.className = "text-sm bg-blue-500 text-white px-3 py-1 rounded-full font-medium";
+        vaBadge.innerText = va.name;
+        vasContainer.appendChild(vaBadge);
+      });
+    }
+
+    // 更新标签
+    const tagsContainer = document.getElementById("mediaTags");
+    tagsContainer.innerHTML = "";
+    if (folder.tags && folder.tags.length > 0) {
+      folder.tags.forEach(tag => {
+        const tagSpan = document.createElement("span");
+        tagSpan.className = "text-xs bg-pink-500 text-white px-2 py-0.5 rounded whitespace-nowrap";
+        tagSpan.title = tag.jaName;
+        tagSpan.innerText = tag.enName;
+        tagsContainer.appendChild(tagSpan);
+      });
+    }
 
     // 尝试更新背景图和黑胶封面 (仅在根目录)
     // 优先级: cover.* > thumbnail.*
