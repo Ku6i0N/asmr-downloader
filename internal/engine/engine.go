@@ -353,7 +353,6 @@ func (m *EngineManager) filterTargetAudioFormat(urls [][]string) [][]string {
 
 func (m *EngineManager) ensureDirExists(tracks []model.Track, storeBaseDir string) ([][]string, error) {
 	path := storeBaseDir
-	path = utils.NormalDirPathStr(path)
 	_ = os.MkdirAll(path, os.ModePerm)
 	//url,path,title
 	var needDownloadUrls [][]string
@@ -362,7 +361,8 @@ func (m *EngineManager) ensureDirExists(tracks []model.Track, storeBaseDir strin
 		if t.Type != "folder" {
 			needDownloadUrls = append(needDownloadUrls, []string{t.MediaDownloadURL, path, t.Title})
 		} else {
-			needDownUrl, _ := m.ensureDirExists(t.Children, fmt.Sprintf("%s/%s", path, t.Title))
+			sanitizedFolderName := utils.NormalDirPathStr(t.Title)
+			needDownUrl, _ := m.ensureDirExists(t.Children, filepath.Join(path, sanitizedFolderName))
 			needDownloadUrls = append(needDownloadUrls, needDownUrl...)
 		}
 	}
