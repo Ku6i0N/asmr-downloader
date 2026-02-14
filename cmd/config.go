@@ -79,25 +79,25 @@ config 命令用于初始化或重置本程序的配置文件，并以“交互�
 func InitConfig(reader *bufio.Reader, configFile string) {
 	logger.Step("正在初始化配置...")
 
-	account := prompt(reader, "用户账号（默认：guest）: ", "guest")
-	password := prompt(reader, "用户密码（默认：guest）: ", "guest")
+	account := prompt(reader, "用户账号 (Account, default: guest): ", "guest")
+	password := prompt(reader, "用户密码 (Password, default: guest): ", "guest")
 
-	apiURL := prompt(reader, "接口地址（默认：自动获取）: ", "")
-	proxyURL := prompt(reader, "代理地址（可选）: ", "")
-	maxWorkers := promptInt(reader, "最大并发数（默认：5）: ", 5)
-	maxRetries := promptInt(reader, "最大重试次数（默认：3）: ", 3)
-	syncDataFolder := prompt(reader, "同步数据存放目录（默认：./syncdata）: ", "./syncdata")
+	apiURL := prompt(reader, "接口地址 (API URL, auto-fetch): ", "")
+	proxyURL := prompt(reader, "代理地址 (Proxy, optional): ", "")
+	maxWorkers := promptInt(reader, "最大并发数 (Max workers, default: 5): ", 5)
+	maxRetries := promptInt(reader, "最大重试次数 (Max retries, default: 3): ", 3)
+	syncDataFolder := prompt(reader, "同步数据存放目录 (Sync folder, default: ./syncdata): ", "./syncdata")
 
-	syncWantedSize := prompt(reader, "同步容量限制（1MB/GB/TB/PB，默认：200MB）: ", "200MB")
-	preferMedia := prompt(reader, "优先媒体格式 [all | mp3>wav>flac]（默认：all）: ", "all")
+	syncWantedSize := prompt(reader, "同步容量限制 (Sync size limit, default: 200MB): ", "200MB")
+	preferMedia := prompt(reader, "优先媒体格式 (Prefer media format, default: all): ", "all")
 
-	syncQPS := promptFloat(reader, "同步请求 QPS（默认：2）: ", 2)
-	syncJitterMin := promptInt(reader, "同步请求抖动最小值（毫秒，默认：100）: ", 100)
-	syncJitterMax := promptInt(reader, "同步请求抖动最大值（毫秒，默认：500）: ", 500)
+	syncQPS := promptFloat(reader, "同步请求 QPS (Sync QPS, default: 2): ", 2)
+	syncJitterMin := promptInt(reader, "同步请求抖动最小值 (Sync jitter min, default: 100ms): ", 100)
+	syncJitterMax := promptInt(reader, "同步请求抖动最大值 (Sync jitter max, default: 500ms): ", 500)
 
-	downloadQPS := promptFloat(reader, "下载请求 QPS（默认：0.2）: ", 0.2)
-	downloadJitterMin := promptInt(reader, "下载抖动最小值（毫秒，默认：2000）: ", 2000)
-	downloadJitterMax := promptInt(reader, "下载抖动最大值（毫秒，默认：5000）: ", 5000)
+	downloadQPS := promptFloat(reader, "下载请求 QPS (Download QPS, default: 0.2): ", 0.2)
+	downloadJitterMin := promptInt(reader, "下载抖动最小值 (Download jitter min, default: 2000ms): ", 2000)
+	downloadJitterMax := promptInt(reader, "下载抖动最大值 (Download jitter max, default: 5000ms): ", 5000)
 
 	// ------------------------- 写入配置 -------------------------
 	viper.Set("user.account", account)
