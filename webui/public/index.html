@@ -7,8 +7,8 @@
 
   <script src="/public/js/tailwindcss-3.4.17.js"></script>
 
-  <link rel="stylesheet" href="/public/css/plyr-3.7.8.css" />
-  <script src="/public/js/plyr-3.7.8.js"></script>
+  <link rel="stylesheet" href="/public/css/plyr-3.8.4.css" />
+  <script src="/public/js/plyr-3.8.4.js"></script>
 
   <style>
       /* 自定义滚动条 */
@@ -37,15 +37,25 @@
 
   <div class="w-full md:w-[600px] flex flex-col border-r border-gray-100 bg-white z-20 h-full">
 
-            <div class="p-4 border-b border-gray-100 flex flex-wrap gap-3 items-center bg-white/95 backdrop-blur z-10 sticky top-0">
-                <h1 class="font-bold text-pink-500 text-lg tracking-tight whitespace-nowrap"><i class="fas fa-music mr-2"></i>ASMR Lite</h1>
-                <input id="folderSearch" type="text" placeholder="Title / VA / Tags" class="flex-1 min-w-[180px] px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-300" />
-                <select id="tagFilter" class="min-w-[130px] px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-300">
-                    <option value="">All Tags</option>
-                </select>
-      <div class="flex gap-3 text-gray-400">
-        <button class="hover:text-pink-500 transition"><i class="fas fa-bars"></i></button>
-      </div>
+            <div class="p-4 border-b border-gray-100 bg-white/95 backdrop-blur z-10 sticky top-0">
+                <div class="flex flex-wrap gap-3 items-center">
+                    <h1 class="font-bold text-pink-500 text-lg tracking-tight whitespace-nowrap"><i class="fas fa-music mr-2"></i>ASMR Lite</h1>
+                    <input id="folderSearch" type="text" placeholder="Title / VA / Tags" class="flex-1 min-w-[180px] px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-300" />
+                    <select id="tagFilter" class="min-w-[130px] px-3 py-2 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-300">
+                        <option value="">All Tags</option>
+                    </select>
+          <div class="flex gap-3 text-gray-400">
+            <button class="hover:text-pink-500 transition"><i class="fas fa-bars"></i></button>
+          </div>
+        </div>
+        <div class="mt-3 relative">
+          <div id="multiTagBadges" class="flex flex-wrap gap-2 mb-2"></div>
+          <input id="multiTagSearch" type="text" placeholder="Filter by tags (multi-select, matches all)" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-200 focus:border-pink-300" autocomplete="off" />
+          <div id="multiTagSuggestions" class="hidden absolute left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg z-20"></div>
+        </div>
+        <div class="mt-2 flex justify-end">
+          <button id="resetFilters" type="button" class="px-3 py-2 text-sm border border-gray-200 rounded-md bg-white hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition">Reset Filters</button>
+        </div>
     </div>
 
     <ul id="folderList" class="flex-1 overflow-y-auto p-2 space-y-1">
@@ -71,22 +81,26 @@
         </div>
       </div>
 
-      <div class="w-full max-w-3xl z-20 shadow-lg rounded-xl overflow-hidden bg-black">
-        <audio id="player" controls class="w-full"></audio>
+      <div class="w-full max-w-3xl z-20 shadow-lg rounded-xl bg-black">
+        <audio id="player" controls class="w-full plyr--menus-down"></audio>
       </div>
 
       <div class="mt-4 z-20 text-center px-4">
         <h3 id="mediaTitle" class="text-white font-medium text-lg line-clamp-1">未播放 / Not Playing</h3>
         <p id="mediaSubtitle" class="text-gray-400 text-sm mt-1">选择左侧列表开始播放 / Select from list</p>
+        <p id="nowPlayingFile" class="text-gray-300 text-xs mt-1 line-clamp-1"><span>Current file:</span> <span id="nowPlayingFileValue" class="font-semibold text-white">-</span></p>
         <div id="mediaVas" class="mt-2 flex justify-center flex-wrap gap-2"></div>
         <div id="mediaTags" class="flex flex-wrap gap-1 mt-2 justify-center"></div>
       </div>
     </div>
 
     <div class="flex-1 overflow-y-auto bg-white flex flex-col">
-      <div class="px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10 flex gap-4">
-        <span class="px-3 py-1 bg-pink-500 text-white text-xs rounded-full font-bold">MP3 / WAV</span>
-        <span class="text-gray-400 text-xs flex items-center">播放列表 / Play List</span>
+      <div class="px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10 flex justify-between items-center gap-4">
+        <div class="flex gap-4 items-center">
+          <span class="px-3 py-1 bg-pink-500 text-white text-xs rounded-full font-bold">MP3 / WAV</span>
+          <span class="text-gray-400 text-xs flex items-center">播放列表 / Play List</span>
+        </div>
+        <button id="expandAllFoldersBtn" type="button" class="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50" disabled>Expand All</button>
       </div>
 
       <ul id="mediaList" class="p-2 space-y-1 pb-20">
@@ -97,18 +111,24 @@
 
 </div>
 
-<script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+<script src="/public/js/index-helpers.js"></script>
 
 <script>
   let currentPage = 1;
-  let pageSize = 100;
+  let pageSize = 50;
   let player = null;
+  let allFoldersCache = null;
+  let isFilterMode = false;
+  let availableTagNames = [];
+  let selectedMultiTags = [];
 
   let currentMediaList = [];
   let currentMediaIndex = -1;
   let currentFolder = null;
   let expandedSubfolders = new Set();
   let currentPlayingFilePath = null;
+  let currentPlayingFolderKey = null;
+  let currentPlayingFileName = "-";
 
   let allFolders = [];
   document.addEventListener("DOMContentLoaded", () => {
@@ -130,122 +150,72 @@
       playNextMedia();
     });
 
+    initMultiTagFilter();
+
     loadFolders(currentPage);
 
     document.getElementById("prevPage").onclick = () => {
       if (currentPage > 1) {
         currentPage--;
-        loadFolders(currentPage);
+        if (hasActiveFilters()) {
+          applyFolderFilters();
+        } else {
+          loadFolders(currentPage);
+        }
       }
     };
 
     document.getElementById("nextPage").onclick = () => {
       currentPage++;
-      loadFolders(currentPage);
+      if (hasActiveFilters()) {
+        applyFolderFilters();
+      } else {
+        loadFolders(currentPage);
+      }
     };
   });
 
-  document.getElementById("folderSearch").addEventListener("input", applyFolderFilters);
-  document.getElementById("tagFilter").addEventListener("change", applyFolderFilters);
+  document.getElementById("folderSearch").addEventListener("input", () => {
+    currentPage = 1;
+    applyFolderFilters();
+  });
+  document.getElementById("tagFilter").addEventListener("change", () => {
+    currentPage = 1;
+    applyFolderFilters();
+  });
+  document.getElementById("expandAllFoldersBtn").addEventListener("click", toggleExpandAllFolders);
+  document.getElementById("resetFilters").addEventListener("click", resetAllFilters);
+  document.getElementById("folderList").addEventListener("click", event => {
+    const tagElement = event.target.closest("[data-folder-tag]");
+    if (!tagElement) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    selectTagFilter(tagElement.getAttribute("data-folder-tag"));
+  });
 
 
   /** 加载目录列表 */
-  function loadFolders(page) {
+  async function loadFolders(page) {
+    if (hasActiveFilters()) {
+      await applyFolderFilters();
+      return;
+    }
+
+    isFilterMode = false;
+
     // 模拟 loading 状态
     document.getElementById("folderList").innerHTML = '<div class="flex justify-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div></div>';
 
-    fetch(`/api/list?page=${page}&pageSize=${pageSize}`)
-      .then(res => res.json())
-      .then(json => {
-        const data = json.data;
-        allFolders = data.infos || [];
-        renderTagFilterOptions(allFolders);
-        applyFolderFilters();
-
-        document.getElementById("pageInfo").innerText =
-          `${data.page} / ${Math.ceil(data.total / data.pageSize)}`;
-
-        // 更新翻页按钮状态
-        document.getElementById("prevPage").disabled = data.page <= 1;
-        document.getElementById("nextPage").disabled = data.page >= Math.ceil(data.total / data.pageSize);
-      })
-      .catch(err => {
-        document.getElementById("folderList").innerHTML = `<div class="text-center py-10 text-red-400">加载失败: ${err}</div>`;
-      });
-  }
-
-
-  function renderTagFilterOptions(folders) {
-      const tagFilter = document.getElementById("tagFilter");
-      const currentValue = tagFilter.value;
-      const enTags = new Set();
-
-      folders.forEach(folder => {
-          (folder.tags || []).forEach(tag => {
-              if (tag?.enName) enTags.add(tag.enName);
-          });
-      });
-
-      const sortedTags = [...enTags].sort((a, b) => a.localeCompare(b));
-      tagFilter.innerHTML = '<option value="">— All —</option>';
-
-      const favoriteOption = document.createElement("option");
-      favoriteOption.value = "__favorites__";
-      favoriteOption.innerText = "★ Favorites";
-      tagFilter.appendChild(favoriteOption);
-
-      sortedTags.forEach(tagName => {
-          const option = document.createElement("option");
-          option.value = tagName;
-          option.innerText = tagName;
-          tagFilter.appendChild(option);
-      });
-
-      tagFilter.value = sortedTags.includes(currentValue) ? currentValue : "";
-      if (currentValue === "__favorites__") {
-        tagFilter.value = "__favorites__";
-      }
-  }
-
-  function isFolderFavorite(folder) {
-    const markerName = ".isfavorite";
-    return (folder.files || []).some(file => {
-      const rawPath = normalizePath(file.path || file.name || "").toLowerCase();
-      if (!rawPath) return false;
-      return rawPath === markerName || rawPath.endsWith(`/${markerName}`);
-    });
-  }
-
-  function applyFolderFilters() {
-      const searchInput = document.getElementById("folderSearch");
-      const tagFilter = document.getElementById("tagFilter");
-      const keyword = searchInput.value.trim().toLowerCase();
-      const selectedTag = tagFilter.value;
-
-      if (!keyword && !selectedTag) {
-          renderFolders(allFolders);
-          return;
-      }
-
-      const filteredFolders = allFolders.filter(folder => {
-          const title = (folder.name || "").toLowerCase();
-          const vaNames = (folder.vas || []).map(va => (va?.name || "").toLowerCase());
-          const enTagNames = (folder.tags || []).map(tag => (tag?.enName || "").toLowerCase());
-
-          const searchMatched = !keyword ||
-              title.includes(keyword) ||
-              vaNames.some(name => name.includes(keyword)) ||
-              enTagNames.some(tag => tag.includes(keyword));
-
-            const tagMatched = !selectedTag ||
-              (selectedTag === "__favorites__"
-              ? isFolderFavorite(folder)
-              : (folder.tags || []).some(tag => tag?.enName === selectedTag));
-
-          return searchMatched && tagMatched;
-      });
-
-      renderFolders(filteredFolders);
+    try {
+      const data = await fetchFolderPage(page, pageSize);
+      allFolders = data.infos || [];
+      renderTagFilterOptions(allFolders);
+      renderFolders(allFolders);
+      updatePaginationState(data.page, Math.ceil(data.total / data.pageSize));
+    } catch (err) {
+      document.getElementById("folderList").innerHTML = `<div class="text-center py-10 text-red-400">加载失败: ${err}</div>`;
+    }
   }
 
   /** 渲染目录 (卡片样式) */
@@ -253,12 +223,12 @@
     const ul = document.getElementById("folderList");
     ul.innerHTML = "";
 
-    folders.forEach((folder, folderIndex) => {
-      if (folders.length === 0) {
-          ul.innerHTML = '<div class="text-center py-10 text-gray-400 text-sm">没有匹配的目录 / No matching folders</div>';
-          return;
-      }
+    if (folders.length === 0) {
+      ul.innerHTML = '<div class="text-center py-10 text-gray-400 text-sm">没有匹配的目录 / No matching folders</div>';
+      return;
+    }
 
+    folders.forEach((folder, folderIndex) => {
       const li = document.createElement("li");
 
       // 查找本地封面文件 (仅在根目录) (优先级: cover.* > thumbnail.*)
@@ -274,7 +244,7 @@
         
         const imageFile = coverFile || thumbnailFile;
         if (imageFile) {
-          coverUrl = folder.baseDir + "/" + folder.name + "/" + imageFile.name;
+          coverUrl = encodePathForUrl(folder.baseDir + "/" + folder.name + "/" + imageFile.name);
         }
       }
 
@@ -305,7 +275,7 @@
             ${folder.tags && folder.tags.length > 0 ? `
             <div class="flex flex-wrap gap-1">
                 ${folder.tags.map(tag => tag?.enName && `
-                <span class="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded whitespace-nowrap" title="${tag.jaName}">${tag.enName}</span>
+              <span class="text-xs bg-pink-100 text-pink-700 px-2 py-0.5 rounded whitespace-nowrap cursor-pointer hover:bg-pink-200" title="${tag.jaName}" data-folder-tag="${escapeHtml(tag.enName)}">${tag.enName}</span>
                 `).join('')}
             </div>
             ` : ''}
@@ -315,7 +285,7 @@
 
       li.onclick = (e) => {
         // 防止点击爱心触发播放
-        if(e.target.closest('button')) return;
+        if(e.target.closest('button') || e.target.closest('[data-folder-tag]')) return;
         onFolderClicked(folder, folderIndex);
       };
 
@@ -333,6 +303,11 @@
     // 更新右侧标题区
     document.getElementById("mediaTitle").innerText = folder.name;
     document.getElementById("mediaSubtitle").innerText = folder.mediaId || "未知编号";
+    if (isPlayingFolder(folder) && currentPlayingFilePath) {
+      setNowPlayingFile(currentPlayingFileName);
+    } else if (!currentPlayingFilePath) {
+      setNowPlayingFile("-");
+    }
 
     // 更新声优
     const vasContainer = document.getElementById("mediaVas");
@@ -352,9 +327,14 @@
     if (folder.tags && folder.tags.length > 0) {
       folder.tags.forEach(tag => {
         const tagSpan = document.createElement("span");
-        tagSpan.className = "text-xs bg-pink-500 text-white px-2 py-0.5 rounded whitespace-nowrap";
+        tagSpan.className = "text-xs bg-pink-500 text-white px-2 py-0.5 rounded whitespace-nowrap cursor-pointer hover:bg-pink-400";
         tagSpan.title = tag.jaName;
         tagSpan.innerText = tag.enName;
+        tagSpan.onclick = event => {
+          event.preventDefault();
+          event.stopPropagation();
+          selectTagFilter(tag.enName);
+        };
         tagsContainer.appendChild(tagSpan);
       });
     }
@@ -374,7 +354,7 @@
       );
     }
     if (coverFile) {
-      const fullCoverPath = folder.baseDir + "/" + folder.name + "/" + coverFile.name;
+      const fullCoverPath = encodePathForUrl(folder.baseDir + "/" + folder.name + "/" + coverFile.name);
       document.getElementById('vinylCover').src = fullCoverPath;
       document.getElementById('playerBg').style.backgroundImage = `url('${fullCoverPath}')`;
     } else {
@@ -386,11 +366,15 @@
     const mediaFiles = allFiles.filter(f => isAudioFileByName(f.name || f.path));
 
     currentMediaList = mediaFiles;
-    currentMediaIndex = -1;
-    currentPlayingFilePath = null;
+    if (isPlayingFolder(folder) && currentPlayingFilePath) {
+      currentMediaIndex = mediaFiles.findIndex(item => normalizePath(item.path || item.name) === normalizePath(currentPlayingFilePath));
+    } else {
+      currentMediaIndex = -1;
+    }
     expandedSubfolders = new Set();
 
     renderMediaList(folder, allFiles);
+    updateExpandAllButton();
   }
 
   function normalizePath(path) {
@@ -474,8 +458,8 @@
     return root;
   }
 
-  function folderContainsPlaying(folderPath) {
-    if (!currentPlayingFilePath) return false;
+  function folderContainsPlaying(folder, folderPath) {
+    if (!currentPlayingFilePath || !isPlayingFolder(folder)) return false;
     const currentPath = normalizePath(currentPlayingFilePath);
     const normalizedFolderPath = normalizePath(folderPath);
     return currentPath.startsWith(`${normalizedFolderPath}/`);
@@ -487,7 +471,7 @@
 
     sortedFolders.forEach(folderNode => {
       const isExpanded = expandedSubfolders.has(folderNode.path);
-      const showFolderPlayingIndicator = folderContainsPlaying(folderNode.path) && !isExpanded;
+      const showFolderPlayingIndicator = folderContainsPlaying(folder, folderNode.path) && !isExpanded;
 
       const folderLi = document.createElement("li");
       folderLi.className = "flex items-center gap-2 py-2 pr-3 rounded-lg bg-gray-50 hover:bg-pink-50 cursor-pointer transition border border-gray-100";
@@ -506,6 +490,7 @@
           expandedSubfolders.add(folderNode.path);
         }
         renderMediaList(folder, folder.files || []);
+        updateExpandAllButton();
       };
 
       ul.appendChild(folderLi);
@@ -516,7 +501,7 @@
     });
 
     sortedFiles.forEach(({ file, normalizedPath, name, isAudio }) => {
-      const isPlaying = normalizePath(currentPlayingFilePath) === normalizedPath;
+      const isPlaying = isPlayingFolder(folder) && normalizePath(currentPlayingFilePath) === normalizedPath;
 
       const fileLi = document.createElement("li");
       fileLi.className = isPlaying
@@ -537,7 +522,7 @@
           return;
         }
 
-        const fileUrl = encodeURI(folder.baseDir + "/" + folder.name + "/" + (file.path || file.name));
+        const fileUrl = encodePathForUrl(folder.baseDir + "/" + folder.name + "/" + (file.path || file.name));
         window.open(fileUrl, "_blank", "noopener,noreferrer");
       };
 
@@ -557,6 +542,7 @@
 
     const fileTree = buildFileTree(files);
     renderTreeNode(ul, folder, fileTree, 0);
+    updateExpandAllButton();
   }
 
   /** 播放媒体并更新高亮 */
@@ -566,8 +552,12 @@
     }
 
     currentPlayingFilePath = normalizePath(file.path || file.name);
+    currentPlayingFolderKey = getFolderKey(folder);
+    const rawName = (file.name || file.path || "").replace(/\\/g, '/');
+    const displayName = rawName.split('/').pop() || rawName || "-";
+    setNowPlayingFile(displayName);
 
-    const base = folder.baseDir + "/" + folder.name + "/" + file.path;
+    const base = encodePathForUrl(folder.baseDir + "/" + folder.name + "/" + file.path);
     const vttPath = base + ".vtt";
     const vttFileName = (file.path || file.name) + ".vtt";
     const subtitleExists = folder.files.some(f => f.path === vttFileName);
