@@ -62,10 +62,19 @@
       <div class="text-center py-10 text-gray-400 text-sm">Loading...</div>
     </ul>
 
-    <div class="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 text-sm">
-                <button id="prevPage" class="px-3 py-1.5 rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50">⮜ 上一页</button>
-      <span id="pageInfo" class="font-mono text-gray-500">1/1</span>
-                <button id="nextPage" class="px-3 py-1.5 rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50">下一页 ⮞</button>
+    <div class="p-3 border-t border-gray-100 bg-gray-50 text-sm space-y-2">
+      <div class="flex items-center justify-between">
+        <div id="folderCountInfo" class="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600">
+          <span id="folderCountDot" class="h-2 w-2 rounded-full bg-gray-300"></span>
+          <span id="folderCountLabel">Total folders</span>
+          <span id="folderCountValue" class="font-semibold text-gray-700">0</span>
+        </div>
+        <span id="pageInfo" class="font-mono text-gray-500">1/1</span>
+      </div>
+      <div class="flex justify-between items-center">
+        <button id="prevPage" class="px-3 py-1.5 rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50">⮜ 上一页</button>
+        <button id="nextPage" class="px-3 py-1.5 rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50">下一页 ⮞</button>
+      </div>
     </div>
   </div>
 
@@ -100,7 +109,10 @@
           <span class="px-3 py-1 bg-pink-500 text-white text-xs rounded-full font-bold">MP3 / WAV</span>
           <span class="text-gray-400 text-xs flex items-center">播放列表 / Play List</span>
         </div>
-        <button id="expandAllFoldersBtn" type="button" class="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50" disabled>Expand All</button>
+        <div class="flex items-center gap-2">
+          <button id="favoriteCurrentFolderBtn" type="button" class="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50" disabled>☆ Favorite</button>
+          <button id="expandAllFoldersBtn" type="button" class="px-3 py-1.5 text-xs rounded-md bg-white border border-gray-200 hover:bg-pink-50 hover:text-pink-500 hover:border-pink-200 transition disabled:opacity-50" disabled>Expand All</button>
+        </div>
       </div>
 
       <ul id="mediaList" class="p-2 space-y-1 pb-20">
@@ -151,6 +163,7 @@
     });
 
     initMultiTagFilter();
+    updateFavoriteToggleButton();
 
     loadFolders(currentPage);
 
@@ -183,6 +196,19 @@
     currentPage = 1;
     applyFolderFilters();
   });
+  document.getElementById("favoriteCurrentFolderBtn").addEventListener("click", async () => {
+    if (!currentFolder) return;
+
+    const button = document.getElementById("favoriteCurrentFolderBtn");
+    button.setAttribute("disabled", "disabled");
+    try {
+      await toggleFolderFavorite(currentFolder);
+    } catch (err) {
+      alert(`收藏操作失败: ${err}`);
+    } finally {
+      updateFavoriteToggleButton();
+    }
+  });
   document.getElementById("expandAllFoldersBtn").addEventListener("click", toggleExpandAllFolders);
   document.getElementById("resetFilters").addEventListener("click", resetAllFilters);
   document.getElementById("folderList").addEventListener("click", event => {
@@ -213,8 +239,10 @@
       renderTagFilterOptions(allFolders);
       renderFolders(allFolders);
       updatePaginationState(data.page, Math.ceil(data.total / data.pageSize));
+      updateFolderCountState(data.total, { filtered: false });
     } catch (err) {
       document.getElementById("folderList").innerHTML = `<div class="text-center py-10 text-red-400">加载失败: ${err}</div>`;
+      updateFolderCountState(0, { filtered: false });
     }
   }
 
@@ -230,6 +258,7 @@
 
     folders.forEach((folder, folderIndex) => {
       const li = document.createElement("li");
+      const favorite = isFolderFavorite(folder);
 
       // 查找本地封面文件 (仅在根目录) (优先级: cover.* > thumbnail.*)
       let coverUrl = "/public/css/img.png"; // 默认占位图
@@ -251,8 +280,8 @@
       // 生成卡片 HTML
       li.className = "group cursor-pointer rounded-xl p-3 hover:bg-gray-50 transition border border-transparent hover:border-pink-100 flex gap-3 items-center";
       const favoriteBadge = `
-        <div class="w-6 h-36 shrink-0 flex items-start justify-center pt-1" ${isFolderFavorite(folder) ? 'title="Favorite"' : ''}>
-          <span class="text-yellow-500 text-3xl ${isFolderFavorite(folder) ? '' : 'opacity-0'}">★</span>
+        <div class="w-6 h-36 shrink-0 flex items-start justify-center pt-1" ${favorite ? 'title="Favorite"' : ''}>
+          <span class="text-yellow-500 text-3xl ${favorite ? '' : 'opacity-0'}">★</span>
         </div>
       `;
       li.innerHTML = `
@@ -280,12 +309,10 @@
             </div>
             ` : ''}
         </div>
-        <button class="text-gray-300 hover:text-pink-500 p-2"><i class="far fa-heart"></i></button>
       `;
 
       li.onclick = (e) => {
-        // 防止点击爱心触发播放
-        if(e.target.closest('button') || e.target.closest('[data-folder-tag]')) return;
+        if(e.target.closest('[data-folder-tag]')) return;
         onFolderClicked(folder, folderIndex);
       };
 
@@ -375,6 +402,7 @@
 
     renderMediaList(folder, allFiles);
     updateExpandAllButton();
+    updateFavoriteToggleButton();
   }
 
   function normalizePath(path) {

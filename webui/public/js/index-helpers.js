@@ -236,6 +236,91 @@ function removeMultiTagFilter(tagName) {
   applyFolderFilters();
 }
 
+function setFolderFavoriteInMemory(folder, favorite) {
+  if (!folder) return;
+
+  folder.files = folder.files || [];
+  const markerName = ".isfavorite";
+  const markerIndex = folder.files.findIndex(file => normalizePath(file.path || file.name || "").toLowerCase() === markerName);
+
+  if (favorite && markerIndex < 0) {
+    folder.files.push({
+      name: markerName,
+      path: markerName,
+      isDir: false,
+    });
+  }
+
+  if (!favorite && markerIndex >= 0) {
+    folder.files.splice(markerIndex, 1);
+  }
+}
+
+function syncFavoriteStateByFolderName(folderName, favorite) {
+  const updateList = folders => {
+    (folders || []).forEach(folder => {
+      if (folder?.name === folderName) {
+        setFolderFavoriteInMemory(folder, favorite);
+      }
+    });
+  };
+
+  updateList(allFolders);
+  updateList(allFoldersCache);
+
+  if (currentFolder?.name === folderName) {
+    setFolderFavoriteInMemory(currentFolder, favorite);
+  }
+}
+
+function updateFavoriteToggleButton() {
+  const button = document.getElementById("favoriteCurrentFolderBtn");
+  if (!button) return;
+
+  if (!currentFolder) {
+    button.disabled = true;
+    button.innerText = "☆ Favorite";
+    return;
+  }
+
+  const favorite = isFolderFavorite(currentFolder);
+  button.disabled = false;
+  button.innerText = favorite ? "★ Favorited" : "☆ Favorite";
+}
+
+async function toggleFolderFavorite(folder) {
+  if (!folder?.name) return;
+
+  const nextFavorite = !isFolderFavorite(folder);
+  const response = await fetch("/api/favorite", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      folderName: folder.name,
+      favorite: nextFavorite,
+    }),
+  });
+
+  const json = await response.json();
+  if (!response.ok || json?.code !== 200) {
+    throw new Error(json?.msg || `HTTP ${response.status}`);
+  }
+
+  const favorite = !!json?.data?.favorite;
+  const targetName = json?.data?.folderName || folder.name;
+  syncFavoriteStateByFolderName(targetName, favorite);
+
+  if (hasActiveFilters()) {
+    await applyFolderFilters();
+  } else {
+    renderFolders(allFolders);
+  }
+
+  updateFavoriteToggleButton();
+}
+
 function initMultiTagFilter() {
   const input = document.getElementById("multiTagSearch");
   const suggestions = document.getElementById("multiTagSuggestions");
@@ -345,6 +430,32 @@ function updatePaginationState(page, totalPages) {
   document.getElementById("nextPage").disabled = safePage >= safeTotalPages;
 }
 
+function updateFolderCountState(totalCount, options = {}) {
+  const { filtered = false } = options;
+
+  const container = document.getElementById("folderCountInfo");
+  const dot = document.getElementById("folderCountDot");
+  const label = document.getElementById("folderCountLabel");
+  const value = document.getElementById("folderCountValue");
+  if (!container || !dot || !label || !value) return;
+
+  const safeCount = Number.isFinite(totalCount) ? Math.max(0, totalCount) : 0;
+  label.innerText = filtered ? "Filtered folders" : "Total folders";
+  value.innerText = safeCount.toLocaleString();
+
+  container.classList.toggle("border-pink-200", filtered);
+  container.classList.toggle("bg-pink-50", filtered);
+  container.classList.toggle("text-pink-700", filtered);
+  container.classList.toggle("border-gray-200", !filtered);
+  container.classList.toggle("bg-white", !filtered);
+  container.classList.toggle("text-gray-600", !filtered);
+
+  dot.classList.toggle("bg-pink-400", filtered);
+  dot.classList.toggle("bg-gray-300", !filtered);
+  value.classList.toggle("text-pink-700", filtered);
+  value.classList.toggle("text-gray-700", !filtered);
+}
+
 function hasActiveFilters() {
   const keyword = document.getElementById("folderSearch").value.trim();
   const selectedTag = document.getElementById("tagFilter").value;
@@ -445,4 +556,5 @@ async function applyFolderFilters() {
 
   renderFolders(pagedFolders);
   updatePaginationState(currentPage, totalPages);
+  updateFolderCountState(filteredFolders.length, { filtered: true });
 }

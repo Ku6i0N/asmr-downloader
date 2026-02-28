@@ -13,7 +13,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -123,6 +122,74 @@ listen 命令用于启动一个 Web UI 服务器，用于展示和播放下载�
 				"total":    total,
 				"page":     page,
 				"pageSize": pageSize,
+			}))
+		})
+
+		// API: Mark/Unmark folder as favorite
+		r.POST("/api/favorite", func(c *gin.Context) {
+			var req struct {
+				FolderName string `json:"folderName"`
+				Favorite   *bool  `json:"favorite"`
+			}
+
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, wrapResponse(fmt.Errorf("Invalid request parameters: %w", err)))
+				return
+			}
+
+			folderName := strings.TrimSpace(req.FolderName)
+			if folderName == "" {
+				c.JSON(http.StatusBadRequest, wrapResponse(fmt.Errorf("folderName cannot be empty")))
+				return
+			}
+
+			cleanName := filepath.Clean(folderName)
+			if cleanName == "." || cleanName == "" {
+				c.JSON(http.StatusBadRequest, wrapResponse(fmt.Errorf("folderName is invalid")))
+				return
+			}
+
+			targetDir := filepath.Join(absDataFolder, cleanName)
+			relPath, err := filepath.Rel(absDataFolder, targetDir)
+			if err != nil || strings.HasPrefix(relPath, "..") {
+				c.JSON(http.StatusBadRequest, wrapResponse(fmt.Errorf("folderName is not under the data directory")))
+				return
+			}
+
+			folderInfo, err := os.Stat(targetDir)
+			if err != nil {
+				c.JSON(http.StatusNotFound, wrapResponse(fmt.Errorf("directory does not exist: %w", err)))
+				return
+			}
+			if !folderInfo.IsDir() {
+				c.JSON(http.StatusBadRequest, wrapResponse(fmt.Errorf("target is not a directory")))
+				return
+			}
+
+			markerPath := filepath.Join(targetDir, ".isfavorite")
+			_, markerErr := os.Stat(markerPath)
+			isFavorite := markerErr == nil
+
+			desiredFavorite := !isFavorite
+			if req.Favorite != nil {
+				desiredFavorite = *req.Favorite
+			}
+
+			if desiredFavorite {
+				if err := os.WriteFile(markerPath, []byte{}, 0o644); err != nil {
+					c.JSON(http.StatusInternalServerError, wrapResponse(fmt.Errorf("Failed to create favorite marker: %w", err)))
+					return
+				}
+			} else {
+				if err := os.Remove(markerPath); err != nil && !os.IsNotExist(err) {
+					c.JSON(http.StatusInternalServerError, wrapResponse(fmt.Errorf("Failed to remove favorite marker: %w", err)))
+					return
+				}
+			}
+
+			c.JSON(http.StatusOK, wrapResponse(gin.H{
+				"folderName": cleanName,
+				"favorite":   desiredFavorite,
 			}))
 		})
 
@@ -358,15 +425,9 @@ func buildInmemoryDb(asbDataFolder string) *gorm.DB {
 	if err != nil {
 		log.Fatalf("Failed to read directory: %v", err)
 	}
-	//下载的数据目录中的文件名支持三种格式:
-	// 1. code_only: RJ01037721
-	// 2. rj_and_title: RJ01037721-【标题】
-	// 3. full: RJ01037721-20230320-sub-【标题】
-	r := regexp.MustCompile(`^[A-Z]{2}\d{8}(-.+)?$`)
-
 	for _, entry := range entries {
 		if entry.IsDir() {
-			if !r.MatchString(entry.Name()) {
+			if !strings.HasPrefix(strings.ToUpper(entry.Name()), "RJ") {
 				continue
 			}
 			//切分信息
