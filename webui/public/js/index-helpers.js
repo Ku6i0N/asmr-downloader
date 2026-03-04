@@ -21,6 +21,77 @@ function encodePathForUrl(path) {
     .join('/');
 }
 
+function normalizePath(path) {
+  return (path || "").replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
+function isAudioFileByName(fileName) {
+  return /\.(mp3|wav|flac|m4a)$/i.test(fileName || "");
+}
+
+function getFileExtensionLabel(fileName) {
+  return (fileName.split('.').pop() || '').toUpperCase();
+}
+
+function formatAudioDuration(totalSeconds) {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "";
+
+  const roundedSeconds = Math.max(0, Math.round(totalSeconds));
+  const hours = Math.floor(roundedSeconds / 3600);
+  const minutes = Math.floor((roundedSeconds % 3600) / 60);
+  const seconds = roundedSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function getAudioDurationKey(folder, file) {
+  return normalizePath(`${folder.baseDir || ''}/${folder.name || ''}/${file.path || file.name || ''}`);
+}
+
+function getAudioDurationText(folder, file) {
+  const durationKey = getAudioDurationKey(folder, file);
+  if (audioDurationCache.has(durationKey)) {
+    return Promise.resolve(audioDurationCache.get(durationKey));
+  }
+
+  if (audioDurationPending.has(durationKey)) {
+    return audioDurationPending.get(durationKey);
+  }
+
+  const sourcePath = file.path || file.name;
+  const audioUrl = encodePathForUrl(`${folder.baseDir}/${folder.name}/${sourcePath}`);
+
+  const durationPromise = new Promise(resolve => {
+    const audio = document.createElement('audio');
+    audio.preload = 'metadata';
+
+    audio.onloadedmetadata = () => {
+      const durationText = formatAudioDuration(audio.duration);
+      if (durationText) {
+        audioDurationCache.set(durationKey, durationText);
+      }
+      audioDurationPending.delete(durationKey);
+      audio.src = '';
+      resolve(durationText);
+    };
+
+    audio.onerror = () => {
+      audioDurationPending.delete(durationKey);
+      audio.src = '';
+      resolve('');
+    };
+
+    audio.src = audioUrl;
+  });
+
+  audioDurationPending.set(durationKey, durationPromise);
+  return durationPromise;
+}
+
 function getFolderKey(folder) {
   if (!folder) return "";
   return normalizePath(`${folder.baseDir || ""}/${folder.name || ""}`);
@@ -273,6 +344,25 @@ function syncFavoriteStateByFolderName(folderName, favorite) {
   }
 }
 
+function reloadCurrentFolderSelection(options = {}) {
+  const { folderName = currentFolder?.name, preserveExpanded = false } = options;
+  if (!folderName) return;
+
+  let targetFolder = (allFolders || []).find(folder => folder?.name === folderName);
+
+  if (!targetFolder && Array.isArray(allFoldersCache)) {
+    targetFolder = allFoldersCache.find(folder => folder?.name === folderName);
+  }
+
+  if (!targetFolder && currentFolder?.name === folderName) {
+    targetFolder = currentFolder;
+  }
+
+  if (!targetFolder) return;
+
+  onFolderClicked(targetFolder, -1, { preserveExpanded });
+}
+
 function updateFavoriteToggleButton() {
   const button = document.getElementById("favoriteCurrentFolderBtn");
   if (!button) return;
@@ -317,6 +407,11 @@ async function toggleFolderFavorite(folder) {
   } else {
     renderFolders(allFolders);
   }
+
+  reloadCurrentFolderSelection({
+    folderName: targetName,
+    preserveExpanded: true,
+  });
 
   updateFavoriteToggleButton();
 }

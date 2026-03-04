@@ -141,6 +141,8 @@
   let currentPlayingFilePath = null;
   let currentPlayingFolderKey = null;
   let currentPlayingFileName = "-";
+  let audioDurationCache = new Map();
+  let audioDurationPending = new Map();
 
   let allFolders = [];
   document.addEventListener("DOMContentLoaded", () => {
@@ -323,7 +325,8 @@
   }
 
   /** 点击目录 → 展示媒体文件 */
-  function onFolderClicked(folder, folderIndex) {
+  function onFolderClicked(folder, folderIndex, options = {}) {
+    const { preserveExpanded = false } = options;
     currentFolder = folder;
     highlightCurrentFolder();
 
@@ -342,8 +345,18 @@
     if (folder.vas && folder.vas.length > 0) {
       folder.vas.forEach(va => {
         const vaBadge = document.createElement("span");
-        vaBadge.className = "text-sm bg-blue-500 text-white px-3 py-1 rounded-full font-medium";
+        vaBadge.className = "text-sm bg-blue-500 text-white px-3 py-1 rounded-full font-medium cursor-pointer hover:bg-blue-400 transition";
         vaBadge.innerText = va.name;
+        vaBadge.title = `按声优过滤 / Filter by VA: ${va.name}`;
+        vaBadge.onclick = event => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          const searchInput = document.getElementById("folderSearch");
+          searchInput.value = va.name || "";
+          currentPage = 1;
+          applyFolderFilters();
+        };
         vasContainer.appendChild(vaBadge);
       });
     }
@@ -398,19 +411,13 @@
     } else {
       currentMediaIndex = -1;
     }
-    expandedSubfolders = new Set();
+    if (!preserveExpanded) {
+      expandedSubfolders = new Set();
+    }
 
     renderMediaList(folder, allFiles);
     updateExpandAllButton();
     updateFavoriteToggleButton();
-  }
-
-  function normalizePath(path) {
-    return (path || "").replace(/\\/g, '/').replace(/^\/+/, '');
-  }
-
-  function isAudioFileByName(fileName) {
-    return /\.(mp3|wav|flac)$/i.test(fileName || "");
   }
 
   function ensureFolderNode(root, dirParts) {
@@ -530,6 +537,15 @@
 
     sortedFiles.forEach(({ file, normalizedPath, name, isAudio }) => {
       const isPlaying = isPlayingFolder(folder) && normalizePath(currentPlayingFilePath) === normalizedPath;
+      const extensionLabel = getFileExtensionLabel(name);
+      const durationKey = isAudio ? getAudioDurationKey(folder, file) : "";
+      const cachedDuration = isAudio ? (audioDurationCache.get(durationKey) || "") : "";
+      const visibleDuration = isAudio ? (cachedDuration || "--:--") : "";
+      const extensionToken = isAudio && isPlaying ? "🔊" : extensionLabel;
+      const extensionClass = isAudio && isPlaying ? "file-extension text-pink-500" : "file-extension";
+      const fileMetaHtml = isAudio
+        ? `<span class="file-meta-label inline-flex items-center gap-4 text-xs text-gray-300 group-hover:text-pink-400"><span class="file-duration">${visibleDuration}</span><span class="${extensionClass}">${extensionToken}</span></span>`
+        : `<span class="file-meta-label inline-flex items-center gap-4 text-xs text-gray-300 group-hover:text-pink-400"><span class="file-extension">${extensionLabel}</span></span>`;
 
       const fileLi = document.createElement("li");
       fileLi.className = isPlaying
@@ -540,8 +556,16 @@
       fileLi.innerHTML = `
         <span class="text-sm">${isAudio ? '🎵' : '📄'}</span>
         <div class="flex-1 text-sm ${isPlaying ? 'text-pink-600' : 'text-gray-700'} font-medium truncate group-hover:text-pink-600">${name}</div>
-        ${isPlaying ? '<span class="text-xs text-pink-500">🔊</span>' : `<span class="text-xs text-gray-300 group-hover:text-pink-400">${(name.split('.').pop() || '').toUpperCase()}</span>`}
+        ${fileMetaHtml}
       `;
+
+      if (isAudio && !cachedDuration) {
+        const durationLabel = fileLi.querySelector('.file-duration');
+        getAudioDurationText(folder, file).then(durationText => {
+          if (!durationLabel || !durationLabel.isConnected) return;
+          durationLabel.innerText = durationText;
+        });
+      }
 
       fileLi.onclick = () => {
         if (isAudio) {
